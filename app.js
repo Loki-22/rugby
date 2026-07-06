@@ -14,8 +14,28 @@ async function fetchGames() {
     const response = await fetch('/api/games');
     GAMES = await response.json();
     render();
+    // Auto-update scores after fetching games
+    await updateScores();
   } catch (error) {
     console.error('Error fetching games:', error);
+  }
+}
+
+// Update scores from the API
+async function updateScores() {
+  try {
+    const response = await fetch('/api/update-scores', { method: 'POST' });
+    const result = await response.json();
+    
+    if (result.success && result.updated > 0) {
+      console.log(`Auto-updated ${result.updated} game scores`);
+      // Refresh games after scores are updated
+      const gamesResponse = await fetch('/api/games');
+      GAMES = await gamesResponse.json();
+      render();
+    }
+  } catch (error) {
+    console.error('Error auto-updating scores:', error);
   }
 }
 
@@ -198,15 +218,20 @@ function initUpdateBtn() {
       
       if (result.success) {
         btn.textContent = `✅ Updated ${result.updated} games`;
+        
+        // Refresh games display
+        const gamesResponse = await fetch('/api/games');
+        GAMES = await gamesResponse.json();
+        render();
+        
         setTimeout(() => {
-          btn.textContent = "🔄 Update Scores from Web";
+          btn.textContent = "🔄 Update Scores";
           btn.disabled = false;
-          render();
         }, 2000);
       } else {
         btn.textContent = "❌ Update failed";
         setTimeout(() => {
-          btn.textContent = "🔄 Update Scores from Web";
+          btn.textContent = "🔄 Update Scores";
           btn.disabled = false;
         }, 2000);
       }
@@ -214,7 +239,7 @@ function initUpdateBtn() {
       console.error('Error updating scores:', error);
       btn.textContent = "❌ Error updating";
       setTimeout(() => {
-        btn.textContent = "🔄 Update Scores from Web";
+        btn.textContent = "🔄 Update Scores";
         btn.disabled = false;
       }, 2000);
     }
@@ -230,5 +255,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setInterval(updateCountdowns, 60000);
     // Re-render periodically so statuses (Upcoming -> Live -> Awaiting) stay current.
     setInterval(render, 60000);
+    // Auto-update scores every 5 minutes
+    setInterval(updateScores, 5 * 60 * 1000);
   });
 });
