@@ -63,7 +63,7 @@ function seedDatabase() {
           homeShort: "All Blacks",
           awayTeam: "France",
           venue: "One New Zealand Stadium, Christchurch",
-          kickoffUTC: "2026-07-03T19:10:00Z",
+          kickoffUTC: "2026-07-03T07:10:00Z",
           homeScore: null,
           awayScore: null
         },
@@ -85,7 +85,7 @@ function seedDatabase() {
           homeShort: "All Blacks",
           awayTeam: "Ireland",
           venue: "Eden Park, Auckland",
-          kickoffUTC: "2026-07-17T19:10:00Z",
+          kickoffUTC: "2026-07-17T07:10:00Z",
           homeScore: null,
           awayScore: null
         },
