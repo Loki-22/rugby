@@ -74,7 +74,7 @@ function seedDatabase() {
           homeShort: "All Blacks",
           awayTeam: "Italy",
           venue: "Sky Stadium, Wellington",
-          kickoffUTC: "2026-07-10T17:10:00Z",
+          kickoffUTC: "2026-07-11T05:10:00Z",
           homeScore: null,
           awayScore: null
         },
