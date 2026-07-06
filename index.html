@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>All Blacks &amp; Springboks — July 2026 Fixtures (NZ Time)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <h1>All Blacks &amp; Springboks</h1>
+    <p class="subtitle">July 2026 &middot; Nations Championship &middot; All kick-off times shown in <strong>New Zealand time</strong></p>
+    <p class="nz-clock" id="nzClock">Loading New Zealand time&hellip;</p>
+  </header>
+
+  <nav class="filters" aria-label="Team filter">
+    <button class="filter-btn active" data-team="all">All Games</button>
+    <button class="filter-btn" data-team="New Zealand">All Blacks</button>
+    <button class="filter-btn" data-team="South Africa">Springboks</button>
+  </nav>
+
+  <div class="search-bar">
+    <button id="searchBtn" class="search-btn" aria-expanded="false" aria-controls="searchLinks">
+      🔍 Search for upcoming games &amp; results
+    </button>
+    <div id="searchLinks" class="search-links" hidden>
+      <p class="search-hint">Open an official source for the latest fixtures &amp; live results:</p>
+      <div class="search-link-grid">
+        <a class="source-link" href="https://www.allblacks.com/team/all-blacks/fixtures" target="_blank" rel="noopener">All Blacks — Fixtures &amp; Results</a>
+        <a class="source-link" href="https://springboks.rugby/match-centre/fixtures" target="_blank" rel="noopener">Springboks — Match Centre</a>
+        <a class="source-link" href="https://www.world.rugby/tournaments/nations-championship/2026" target="_blank" rel="noopener">Nations Championship 2026</a>
+        <a class="source-link" href="https://www.rugbypass.com/teams/new-zealand/fixtures-results/" target="_blank" rel="noopener">RugbyPass — All Blacks</a>
+        <a class="source-link" href="https://www.rugbypass.com/teams/south-africa/fixtures-results/" target="_blank" rel="noopener">RugbyPass — Springboks</a>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <section id="gamesContainer" class="games-grid" aria-live="polite"></section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Times auto-convert to the <strong>Pacific/Auckland</strong> timezone in your browser. Scores update automatically after each match has been played.</p>
+    <p class="disclaimer">Fixtures and results are stored in <code>games.js</code>. Update scores there as games are played.</p>
+  </footer>
+
+  <script src="games.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
