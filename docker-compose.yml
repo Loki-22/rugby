@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  rugby-app:
+    build: .
+    ports:
+      - "8081:3000"
+    volumes:
+      - rugby_data:/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+
+volumes:
+  rugby_data:
+    driver: local

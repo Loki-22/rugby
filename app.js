@@ -1,10 +1,23 @@
 // ============================================================================
 //  Rendering + timezone logic
-//  All display times use the Pacific/Auckland timezone (New Zealand time).
+//  All display times use Pacific/Auckland timezone for All Blacks games
+//  and local time conversions for international matches.
 // ============================================================================
 
 const NZ_TZ = "Pacific/Auckland";
 const MATCH_DURATION_MS = 100 * 60 * 1000; // ~100 minutes (game + breaks)
+let GAMES = []; // Will be populated from API
+
+// Fetch games from API on page load
+async function fetchGames() {
+  try {
+    const response = await fetch('/api/games');
+    GAMES = await response.json();
+    render();
+  } catch (error) {
+    console.error('Error fetching games:', error);
+  }
+}
 
 const nzDateFmt = new Intl.DateTimeFormat("en-NZ", {
   timeZone: NZ_TZ,
@@ -168,25 +181,54 @@ function initFilters() {
   });
 }
 
-function initSearch() {
-  const btn = document.getElementById("searchBtn");
-  const panel = document.getElementById("searchLinks");
-  if (!btn || !panel) return;
-  btn.addEventListener("click", () => {
-    const open = !panel.hidden;
-    panel.hidden = open;
-    btn.setAttribute("aria-expanded", String(!open));
-    btn.classList.toggle("active", !open);
+function initUpdateBtn() {
+  const btn = document.getElementById("updateBtn");
+  if (!btn) return;
+  
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "⏳ Updating scores...";
+    
+    try {
+      const response = await fetch('/api/update-scores', {
+        method: 'POST'
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        btn.textContent = `✅ Updated ${result.updated} games`;
+        setTimeout(() => {
+          btn.textContent = "🔄 Update Scores from Web";
+          btn.disabled = false;
+          render();
+        }, 2000);
+      } else {
+        btn.textContent = "❌ Update failed";
+        setTimeout(() => {
+          btn.textContent = "🔄 Update Scores from Web";
+          btn.disabled = false;
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error updating scores:', error);
+      btn.textContent = "❌ Error updating";
+      setTimeout(() => {
+        btn.textContent = "🔄 Update Scores from Web";
+        btn.disabled = false;
+      }, 2000);
+    }
   });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  initFilters();
-  initSearch();
-  render();
-  updateClock();
-  setInterval(updateClock, 1000);
-  setInterval(updateCountdowns, 60000);
-  // Re-render periodically so statuses (Upcoming -> Live -> Awaiting) stay current.
-  setInterval(render, 60000);
+  fetchGames().then(() => {
+    initFilters();
+    initUpdateBtn();
+    updateClock();
+    setInterval(updateClock, 1000);
+    setInterval(updateCountdowns, 60000);
+    // Re-render periodically so statuses (Upcoming -> Live -> Awaiting) stay current.
+    setInterval(render, 60000);
+  });
 });
