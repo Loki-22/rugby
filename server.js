@@ -52,7 +52,7 @@ function seedDatabase() {
       return;
     }
     
-    if (row.count === 0) {
+    {
       const games = [
         // JULY 2026 - Nations Championship (Southern Hemisphere)
         // All Blacks
@@ -64,8 +64,8 @@ function seedDatabase() {
           awayTeam: "France",
           venue: "One New Zealand Stadium, Christchurch",
           kickoffUTC: "2026-07-03T07:10:00Z",
-          homeScore: null,
-          awayScore: null
+          homeScore: 34,
+          awayScore: 32
         },
         {
           id: "nz-italy-nc",
@@ -98,8 +98,8 @@ function seedDatabase() {
           awayTeam: "England",
           venue: "Ellis Park, Johannesburg",
           kickoffUTC: "2026-07-03T17:00:00Z",
-          homeScore: null,
-          awayScore: null
+          homeScore: 27,
+          awayScore: 20
         },
         {
           id: "sa-fiji-nc",
@@ -120,6 +120,111 @@ function seedDatabase() {
           awayTeam: "Australia",
           venue: "Loftus Versfeld, Pretoria",
           kickoffUTC: "2026-07-17T17:00:00Z",
+          homeScore: null,
+          awayScore: null
+        },
+
+        // Nations Championship — Other Nations (Round 1, 4 July 2026)
+        {
+          id: "fra-eng-nc-r1",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "France",
+          homeShort: "France",
+          awayTeam: "England",
+          venue: "Stade de France, Paris",
+          kickoffUTC: "2026-07-04T19:00:00Z",
+          homeScore: 24,
+          awayScore: 21
+        },
+        {
+          id: "ita-sco-nc-r1",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Italy",
+          homeShort: "Italy",
+          awayTeam: "Scotland",
+          venue: "Stadio Olimpico, Rome",
+          kickoffUTC: "2026-07-04T17:30:00Z",
+          homeScore: 19,
+          awayScore: 25
+        },
+        {
+          id: "ire-wal-nc-r1",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Ireland",
+          homeShort: "Ireland",
+          awayTeam: "Wales",
+          venue: "Aviva Stadium, Dublin",
+          kickoffUTC: "2026-07-04T20:00:00Z",
+          homeScore: 31,
+          awayScore: 17
+        },
+
+        // Nations Championship — Other Nations (Round 2, 11 July 2026)
+        {
+          id: "eng-fra-nc-r2",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "England",
+          homeShort: "England",
+          awayTeam: "France",
+          venue: "Twickenham Stadium, London",
+          kickoffUTC: "2026-07-11T19:00:00Z",
+          homeScore: null,
+          awayScore: null
+        },
+        {
+          id: "sco-ire-nc-r2",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Scotland",
+          homeShort: "Scotland",
+          awayTeam: "Ireland",
+          venue: "Murrayfield, Edinburgh",
+          kickoffUTC: "2026-07-11T19:30:00Z",
+          homeScore: null,
+          awayScore: null
+        },
+        {
+          id: "wal-ita-nc-r2",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Wales",
+          homeShort: "Wales",
+          awayTeam: "Italy",
+          venue: "Principality Stadium, Cardiff",
+          kickoffUTC: "2026-07-11T20:00:00Z",
+          homeScore: null,
+          awayScore: null
+        },
+
+        // Nations Championship — Other Nations (Round 3, 18 July 2026)
+        {
+          id: "ita-fra-nc-r3",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Italy",
+          homeShort: "Italy",
+          awayTeam: "France",
+          venue: "Stadio Olimpico, Rome",
+          kickoffUTC: "2026-07-18T17:30:00Z",
+          homeScore: null,
+          awayScore: null
+        },
+        {
+          id: "eng-ire-nc-r3",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "England",
+          homeShort: "England",
+          awayTeam: "Ireland",
+          venue: "Twickenham Stadium, London",
+          kickoffUTC: "2026-07-18T19:00:00Z",
+          homeScore: null,
+          awayScore: null
+        },
+        {
+          id: "sco-wal-nc-r3",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Scotland",
+          homeShort: "Scotland",
+          awayTeam: "Wales",
+          venue: "Murrayfield, Edinburgh",
+          kickoffUTC: "2026-07-18T19:30:00Z",
           homeScore: null,
           awayScore: null
         },
@@ -314,7 +419,7 @@ function seedDatabase() {
       ];
 
       const stmt = db.prepare(`
-        INSERT INTO games (id, competition, homeTeam, homeShort, awayTeam, venue, kickoffUTC, homeScore, awayScore)
+        INSERT OR IGNORE INTO games (id, competition, homeTeam, homeShort, awayTeam, venue, kickoffUTC, homeScore, awayScore)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 

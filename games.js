@@ -34,6 +34,39 @@ const GAMES = [
     homeScore: null,
     awayScore: null
   },
+  {
+    id: "fra-eng",
+    competition: "Nations Championship — Round 1",
+    homeTeam: "France",
+    homeShort: "France",
+    awayTeam: "England",
+    venue: "Stade de France, Paris",
+    kickoffUTC: "2026-07-04T19:00:00Z", // 8:00 PM CEST
+    homeScore: null,
+    awayScore: null
+  },
+  {
+    id: "ita-sco",
+    competition: "Nations Championship — Round 1",
+    homeTeam: "Italy",
+    homeShort: "Italy",
+    awayTeam: "Scotland",
+    venue: "Stadio Olimpico, Rome",
+    kickoffUTC: "2026-07-04T17:30:00Z", // 5:30 PM CEST
+    homeScore: null,
+    awayScore: null
+  },
+  {
+    id: "ire-wal",
+    competition: "Nations Championship — Round 1",
+    homeTeam: "Ireland",
+    homeShort: "Ireland",
+    awayTeam: "Wales",
+    venue: "Aviva Stadium, Dublin",
+    kickoffUTC: "2026-07-04T20:00:00Z", // 8:00 PM IST
+    homeScore: null,
+    awayScore: null
+  },
 
   // ---------------- Round 2 — Saturday 11 July 2026 ----------------
   {
@@ -58,6 +91,39 @@ const GAMES = [
     homeScore: null,
     awayScore: null
   },
+  {
+    id: "eng-fra",
+    competition: "Nations Championship — Round 2",
+    homeTeam: "England",
+    homeShort: "England",
+    awayTeam: "France",
+    venue: "Twickenham Stadium, London",
+    kickoffUTC: "2026-07-11T19:00:00Z", // 8:00 PM BST
+    homeScore: null,
+    awayScore: null
+  },
+  {
+    id: "sco-ire",
+    competition: "Nations Championship — Round 2",
+    homeTeam: "Scotland",
+    homeShort: "Scotland",
+    awayTeam: "Ireland",
+    venue: "Murrayfield, Edinburgh",
+    kickoffUTC: "2026-07-11T19:30:00Z", // 8:30 PM BST
+    homeScore: null,
+    awayScore: null
+  },
+  {
+    id: "wal-ita",
+    competition: "Nations Championship — Round 2",
+    homeTeam: "Wales",
+    homeShort: "Wales",
+    awayTeam: "Italy",
+    venue: "Principality Stadium, Cardiff",
+    kickoffUTC: "2026-07-11T20:00:00Z", // 8:00 PM BST
+    homeScore: null,
+    awayScore: null
+  },
 
   // ---------------- Round 3 — Saturday 18 July 2026 ----------------
   {
@@ -79,6 +145,39 @@ const GAMES = [
     awayTeam: "Wales",
     venue: "South Africa (venue TBC)",
     kickoffUTC: "2026-07-18T15:40:00Z", // 5:40 PM SAST
+    homeScore: null,
+    awayScore: null
+  },
+  {
+    id: "ita-fra",
+    competition: "Nations Championship — Round 3",
+    homeTeam: "Italy",
+    homeShort: "Italy",
+    awayTeam: "France",
+    venue: "Stadio Olimpico, Rome",
+    kickoffUTC: "2026-07-18T17:30:00Z", // 5:30 PM CEST
+    homeScore: null,
+    awayScore: null
+  },
+  {
+    id: "eng-ire",
+    competition: "Nations Championship — Round 3",
+    homeTeam: "England",
+    homeShort: "England",
+    awayTeam: "Ireland",
+    venue: "Twickenham Stadium, London",
+    kickoffUTC: "2026-07-18T19:00:00Z", // 8:00 PM BST
+    homeScore: null,
+    awayScore: null
+  },
+  {
+    id: "sco-wal",
+    competition: "Nations Championship — Round 3",
+    homeTeam: "Scotland",
+    homeShort: "Scotland",
+    awayTeam: "Wales",
+    venue: "Murrayfield, Edinburgh",
+    kickoffUTC: "2026-07-18T19:30:00Z", // 8:30 PM BST
     homeScore: null,
     awayScore: null
   }
