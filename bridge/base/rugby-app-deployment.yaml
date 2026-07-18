@@ -1,0 +1,45 @@
+#! rugby-app-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: rugby-app
+    namespace: rugby
+    labels:
+        com.docker.compose.project: rugby
+        com.docker.compose.service: rugby-app
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: rugby
+            com.docker.compose.service: rugby-app
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: rugby
+                com.docker.compose.service: rugby-app
+                com.docker.compose.network.default: "true"
+        spec:
+            restartPolicy: unless-stopped
+            containers:
+                - name: rugby-app
+                  image: rugby-rugby-app
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: NODE_ENV
+                      value: "production"
+                    - name: PORT
+                      value: "3000"
+                  ports:
+                    - name: rugby-app-3000
+                      containerPort: 3000
+                  volumeMounts:
+                    - name: data
+                      mountPath: /data
+            volumes:
+                - name: data
+                  persistentVolumeClaim:
+                    claimName: rugby-app-rugby-data

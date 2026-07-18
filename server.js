@@ -2,15 +2,44 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const FIXTURE_YEAR = process.env.FIXTURE_YEAR || '2026';
+const ENABLE_MOCK_SCORES = process.env.ENABLE_MOCK_SCORES === 'true';
 
-// Middleware
-app.use(cors());
-app.use(bodyParser.json());
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      // App is served over plain HTTP (localhost/Docker), so don't force
+      // the browser to upgrade subresource requests to HTTPS.
+      'upgrade-insecure-requests': null
+    }
+  }
+}));
+
+// Restrict cross-origin access. Set ALLOWED_ORIGIN to lock down to a known
+// frontend origin; defaults to same-origin only (no wildcard).
+const allowedOrigin = process.env.ALLOWED_ORIGIN || false;
+app.use(cors({ origin: allowedOrigin }));
+
+// Limit request body size to mitigate large-payload DoS
+app.use(bodyParser.json({ limit: '10kb' }));
+
+// Basic rate limiting to mitigate abuse / DoS
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use('/api/', apiLimiter);
 
 // Database setup
 const dbPath = '/data/rugby.db';
@@ -108,9 +137,9 @@ function seedDatabase() {
           homeShort: "Springboks",
           awayTeam: "Fiji",
           venue: "Vodacom Park, Durban",
-          kickoffUTC: "2026-07-10T17:00:00Z",
-          homeScore: null,
-          awayScore: null
+          kickoffUTC: "2026-06-06T17:00:00Z",
+          homeScore: 12,
+          awayScore: 15
         },
         {
           id: "sa-australia-nc",
@@ -419,8 +448,24 @@ function seedDatabase() {
       ];
 
       const stmt = db.prepare(`
-        INSERT OR IGNORE INTO games (id, competition, homeTeam, homeShort, awayTeam, venue, kickoffUTC, homeScore, awayScore)
+        INSERT INTO games (id, competition, homeTeam, homeShort, awayTeam, venue, kickoffUTC, homeScore, awayScore)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          competition = excluded.competition,
+          homeTeam = excluded.homeTeam,
+          homeShort = excluded.homeShort,
+          awayTeam = excluded.awayTeam,
+          venue = excluded.venue,
+          kickoffUTC = excluded.kickoffUTC,
+          homeScore = CASE
+            WHEN excluded.homeScore IS NOT NULL AND excluded.awayScore IS NOT NULL THEN excluded.homeScore
+            ELSE games.homeScore
+          END,
+          awayScore = CASE
+            WHEN excluded.homeScore IS NOT NULL AND excluded.awayScore IS NOT NULL THEN excluded.awayScore
+            ELSE games.awayScore
+          END,
+          updated_at = CURRENT_TIMESTAMP
       `);
 
       games.forEach(game => {
@@ -438,7 +483,7 @@ function seedDatabase() {
       });
 
       stmt.finalize(() => {
-        console.log('Database seeded with initial games');
+        console.log('Database seeded/synced with canonical 2026 games');
       });
     }
   });
@@ -448,27 +493,37 @@ function seedDatabase() {
 
 // Get all games
 app.get('/api/games', (req, res) => {
-  db.all('SELECT * FROM games ORDER BY kickoffUTC ASC', (err, rows) => {
+  db.all(
+    'SELECT * FROM games WHERE substr(kickoffUTC, 1, 4) = ? ORDER BY kickoffUTC ASC',
+    [FIXTURE_YEAR],
+    (err, rows) => {
     if (err) {
-      res.status(500).json({ error: err.message });
+      console.error('Error fetching games:', err.message);
+      res.status(500).json({ error: 'Internal server error' });
     } else {
       res.json(rows);
     }
-  });
+    }
+  );
 });
 
 // Get single game
 app.get('/api/games/:id', (req, res) => {
   const { id } = req.params;
-  db.get('SELECT * FROM games WHERE id = ?', [id], (err, row) => {
+  db.get(
+    'SELECT * FROM games WHERE id = ? AND substr(kickoffUTC, 1, 4) = ?',
+    [id, FIXTURE_YEAR],
+    (err, row) => {
     if (err) {
-      res.status(500).json({ error: err.message });
+      console.error('Error fetching game:', err.message);
+      res.status(500).json({ error: 'Internal server error' });
     } else if (!row) {
       res.status(404).json({ error: 'Game not found' });
     } else {
       res.json(row);
     }
-  });
+    }
+  );
 });
 
 // Update game score
@@ -480,12 +535,19 @@ app.put('/api/games/:id/score', (req, res) => {
     return res.status(400).json({ error: 'homeScore and awayScore are required' });
   }
 
+  // Validate scores are non-negative integers within a sane range
+  const isValidScore = (v) => Number.isInteger(v) && v >= 0 && v <= 300;
+  if (!isValidScore(homeScore) || !isValidScore(awayScore)) {
+    return res.status(400).json({ error: 'homeScore and awayScore must be integers between 0 and 300' });
+  }
+
   db.run(
     'UPDATE games SET homeScore = ?, awayScore = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [homeScore, awayScore, id],
     function(err) {
       if (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Error updating score:', err.message);
+        res.status(500).json({ error: 'Internal server error' });
       } else if (this.changes === 0) {
         res.status(404).json({ error: 'Game not found' });
       } else {
@@ -499,9 +561,13 @@ app.put('/api/games/:id/score', (req, res) => {
 app.post('/api/update-scores', async (req, res) => {
   try {
     // Fetch all games from the database
-    db.all('SELECT * FROM games WHERE (homeScore IS NULL OR homeScore = 0) AND (awayScore IS NULL OR awayScore = 0)', async (err, games) => {
+    db.all(
+      'SELECT * FROM games WHERE substr(kickoffUTC, 1, 4) = ? AND (homeScore IS NULL OR homeScore = 0) AND (awayScore IS NULL OR awayScore = 0)',
+      [FIXTURE_YEAR],
+      async (err, games) => {
       if (err) {
-        return res.status(500).json({ error: err.message });
+        console.error('Error fetching games for score update:', err.message);
+        return res.status(500).json({ error: 'Internal server error' });
       }
 
       let updated = 0;
@@ -523,8 +589,8 @@ app.post('/api/update-scores', async (req, res) => {
             // Try to fetch from ESPN API first
             let score = await fetchScoreFromWeb(game);
             
-            // If ESPN fails, generate mock score
-            if (!score || score.homeScore === null || score.awayScore === null) {
+            // Optional mock fallback for local testing only.
+            if (ENABLE_MOCK_SCORES && (!score || score.homeScore === null || score.awayScore === null)) {
               score = generateMockScore(game);
             }
             
@@ -552,9 +618,11 @@ app.post('/api/update-scores', async (req, res) => {
       setTimeout(() => {
         res.json({ success: true, updated, message: `Updated ${updated} games` });
       }, 500);
-    });
+      }
+    );
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error updating scores:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

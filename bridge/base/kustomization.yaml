@@ -1,0 +1,11 @@
+#! kustomization.yaml
+# Generated code, do not edit
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+    - 0-rugby-namespace.yaml
+    - default-network-policy.yaml
+    - rugby-app-deployment.yaml
+    - rugby-app-expose.yaml
+    - rugby-app-rugby-data-persistentVolumeClaim.yaml
+    - rugby-app-service.yaml

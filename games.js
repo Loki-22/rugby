@@ -81,15 +81,15 @@ const GAMES = [
     awayScore: null
   },
   {
-    id: "sa-sco",
+    id: "sa-fiji",
     competition: "Nations Championship — Round 2",
     homeTeam: "South Africa",
     homeShort: "Springboks",
-    awayTeam: "Scotland",
-    venue: "South Africa (venue TBC)",
-    kickoffUTC: "2026-07-11T15:40:00Z", // 5:40 PM SAST
-    homeScore: null,
-    awayScore: null
+    awayTeam: "Fiji",
+    venue: "Vodacom Park, Durban",
+    kickoffUTC: "2026-06-06T17:00:00Z", // 7:00 PM SAST
+    homeScore: 12,
+    awayScore: 15
   },
   {
     id: "eng-fra",

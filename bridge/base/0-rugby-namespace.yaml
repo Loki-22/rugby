@@ -1,0 +1,8 @@
+#! 0-rugby-namespace.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: rugby
+    labels:
+        com.docker.compose.project: rugby

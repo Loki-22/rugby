@@ -1,0 +1,21 @@
+# check if there is at least one published port
+
+#! rugby-app-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: rugby-app-published
+    namespace: rugby
+    labels:
+        com.docker.compose.project: rugby
+        com.docker.compose.service: rugby-app
+spec:
+    selector:
+        com.docker.compose.project: rugby
+        com.docker.compose.service: rugby-app
+    ports:
+        - name: rugby-app-8081
+          port: 8081
+          protocol: TCP
+          targetPort: rugby-app-3000

@@ -255,7 +255,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setInterval(updateCountdowns, 60000);
     // Re-render periodically so statuses (Upcoming -> Live -> Awaiting) stay current.
     setInterval(render, 60000);
-    // Auto-update scores every 5 minutes
-    setInterval(updateScores, 5 * 60 * 1000);
+    // Auto-update scores every 8 hours
+    setInterval(updateScores, 8 * 60 * 60 * 1000);
   });
 });
