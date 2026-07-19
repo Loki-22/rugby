@@ -11,6 +11,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const FIXTURE_YEAR = process.env.FIXTURE_YEAR || '2026';
 const ENABLE_MOCK_SCORES = process.env.ENABLE_MOCK_SCORES === 'true';
+const SCORE_POLL_INTERVAL_MS = Number(process.env.SCORE_POLL_INTERVAL_MS || 8 * 60 * 60 * 1000);
+const ALL_RUGBY_NATIONS_CHAMPIONSHIP_URL = process.env.ALL_RUGBY_NATIONS_CHAMPIONSHIP_URL || 'https://all.rugby/tournament/nations-championship/fixtures-results';
+const MATCH_DURATION_MS = 100 * 60 * 1000;
+
+let scoreUpdateInProgress = false;
+let scorePollingStarted = false;
+let allRugbyScoreCache = { fetchedAt: 0, scores: [] };
 
 // Security middleware
 app.use(helmet({
@@ -42,11 +49,37 @@ const apiLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 
 // Database setup
-const dbPath = '/data/rugby.db';
+const dbPath = process.env.DB_PATH || '/data/mydata.db';
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+
+const legacyDbPath = process.env.LEGACY_DB_PATH || '/data/rugby.db';
+if (!fs.existsSync(dbPath) && fs.existsSync(legacyDbPath)) {
+  fs.copyFileSync(legacyDbPath, dbPath);
+  console.log(`Migrated existing SQLite database from ${legacyDbPath} to ${dbPath}`);
+}
+
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) console.error('Database connection error:', err);
-  else console.log('Connected to SQLite database');
+  else console.log(`Connected to SQLite database at ${dbPath}`);
 });
+
+function dbAll(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+}
+
+function dbRun(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function(err) {
+      if (err) reject(err);
+      else resolve(this);
+    });
+  });
+}
 
 // Initialize database with games table
 function initializeDatabase() {
@@ -118,6 +151,40 @@ function seedDatabase() {
           homeScore: null,
           awayScore: null
         },
+        // Other Round 1 matches
+        {
+          id: "jp-italy-nc-r1",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Japan",
+          homeShort: "Japan",
+          awayTeam: "Italy",
+          venue: "Japan",
+          kickoffUTC: "2026-07-04T09:10:00Z",
+          homeScore: 27,
+          awayScore: 10
+        },
+        {
+          id: "aus-ireland-nc-r1",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Australia",
+          homeShort: "Australia",
+          awayTeam: "Ireland",
+          venue: "Australia",
+          kickoffUTC: "2026-07-04T10:40:00Z",
+          homeScore: 31,
+          awayScore: 33
+        },
+        {
+          id: "fiji-wales-nc-r1",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Fiji",
+          homeShort: "Fiji",
+          awayTeam: "Wales",
+          venue: "Fiji",
+          kickoffUTC: "2026-07-04T12:10:00Z",
+          homeScore: 24,
+          awayScore: 39
+        },
         // Springboks
         {
           id: "sa-england-nc",
@@ -127,135 +194,133 @@ function seedDatabase() {
           awayTeam: "England",
           venue: "Ellis Park, Johannesburg",
           kickoffUTC: "2026-07-03T17:00:00Z",
-          homeScore: 27,
-          awayScore: 20
-        },
-        {
-          id: "sa-fiji-nc",
-          competition: "Nations Championship - Southern Hemisphere",
-          homeTeam: "South Africa",
-          homeShort: "Springboks",
-          awayTeam: "Fiji",
-          venue: "Vodacom Park, Durban",
-          kickoffUTC: "2026-06-06T17:00:00Z",
-          homeScore: 12,
-          awayScore: 15
-        },
-        {
-          id: "sa-australia-nc",
-          competition: "Nations Championship - Southern Hemisphere",
-          homeTeam: "South Africa",
-          homeShort: "Springboks",
-          awayTeam: "Australia",
-          venue: "Loftus Versfeld, Pretoria",
-          kickoffUTC: "2026-07-17T17:00:00Z",
-          homeScore: null,
-          awayScore: null
-        },
-
-        // Nations Championship — Other Nations (Round 1, 4 July 2026)
-        {
-          id: "fra-eng-nc-r1",
-          competition: "Nations Championship - Southern Hemisphere",
-          homeTeam: "France",
-          homeShort: "France",
-          awayTeam: "England",
-          venue: "Stade de France, Paris",
-          kickoffUTC: "2026-07-04T19:00:00Z",
-          homeScore: 24,
+          homeScore: 45,
           awayScore: 21
         },
         {
-          id: "ita-sco-nc-r1",
+          id: "arg-scotland-nc-r1",
           competition: "Nations Championship - Southern Hemisphere",
-          homeTeam: "Italy",
-          homeShort: "Italy",
+          homeTeam: "Argentina",
+          homeShort: "Argentina",
           awayTeam: "Scotland",
-          venue: "Stadio Olimpico, Rome",
-          kickoffUTC: "2026-07-04T17:30:00Z",
-          homeScore: 19,
-          awayScore: 25
-        },
-        {
-          id: "ire-wal-nc-r1",
-          competition: "Nations Championship - Southern Hemisphere",
-          homeTeam: "Ireland",
-          homeShort: "Ireland",
-          awayTeam: "Wales",
-          venue: "Aviva Stadium, Dublin",
-          kickoffUTC: "2026-07-04T20:00:00Z",
-          homeScore: 31,
-          awayScore: 17
+          venue: "Argentina",
+          kickoffUTC: "2026-07-04T19:10:00Z",
+          homeScore: 38,
+          awayScore: 47
         },
 
-        // Nations Championship — Other Nations (Round 2, 11 July 2026)
+        // Nations Championship - Other Nations (Round 2, 11 July 2026)
         {
-          id: "eng-fra-nc-r2",
+          id: "aus-france-nc-r2",
           competition: "Nations Championship - Southern Hemisphere",
-          homeTeam: "England",
-          homeShort: "England",
+          homeTeam: "Australia",
+          homeShort: "Australia",
           awayTeam: "France",
-          venue: "Twickenham Stadium, London",
-          kickoffUTC: "2026-07-11T19:00:00Z",
-          homeScore: null,
-          awayScore: null
+          venue: "Australia",
+          kickoffUTC: "2026-07-11T09:10:00Z",
+          homeScore: 26,
+          awayScore: 42
         },
         {
-          id: "sco-ire-nc-r2",
+          id: "jp-ireland-nc-r2",
           competition: "Nations Championship - Southern Hemisphere",
-          homeTeam: "Scotland",
-          homeShort: "Scotland",
+          homeTeam: "Japan",
+          homeShort: "Japan",
           awayTeam: "Ireland",
-          venue: "Murrayfield, Edinburgh",
-          kickoffUTC: "2026-07-11T19:30:00Z",
-          homeScore: null,
-          awayScore: null
+          venue: "Japan",
+          kickoffUTC: "2026-07-11T10:40:00Z",
+          homeScore: 20,
+          awayScore: 36
         },
         {
-          id: "wal-ita-nc-r2",
+          id: "fiji-england-nc-r2",
           competition: "Nations Championship - Southern Hemisphere",
-          homeTeam: "Wales",
-          homeShort: "Wales",
+          homeTeam: "Fiji",
+          homeShort: "Fiji",
+          awayTeam: "England",
+          venue: "Fiji",
+          kickoffUTC: "2026-07-11T12:10:00Z",
+          homeScore: 8,
+          awayScore: 73
+        },
+        {
+          id: "sa-scotland-nc-r2",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "South Africa",
+          homeShort: "Springboks",
+          awayTeam: "Scotland",
+          venue: "South Africa",
+          kickoffUTC: "2026-07-11T15:40:00Z",
+          homeScore: 42,
+          awayScore: 28
+        },
+        {
+          id: "arg-wales-nc-r2",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Argentina",
+          homeShort: "Argentina",
+          awayTeam: "Wales",
+          venue: "Argentina",
+          kickoffUTC: "2026-07-11T19:10:00Z",
+          homeScore: 35,
+          awayScore: 21
+        },
+
+        // Nations Championship - Other Nations (Round 3, 18 July 2026)
+        {
+          id: "jp-france-nc-r3",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Japan",
+          homeShort: "Japan",
+          awayTeam: "France",
+          venue: "Japan",
+          kickoffUTC: "2026-07-18T09:10:00Z",
+          homeScore: 15,
+          awayScore: 42
+        },
+        {
+          id: "aus-italy-nc-r3",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Australia",
+          homeShort: "Australia",
           awayTeam: "Italy",
-          venue: "Principality Stadium, Cardiff",
-          kickoffUTC: "2026-07-11T20:00:00Z",
-          homeScore: null,
-          awayScore: null
-        },
-
-        // Nations Championship — Other Nations (Round 3, 18 July 2026)
-        {
-          id: "ita-fra-nc-r3",
-          competition: "Nations Championship - Southern Hemisphere",
-          homeTeam: "Italy",
-          homeShort: "Italy",
-          awayTeam: "France",
-          venue: "Stadio Olimpico, Rome",
-          kickoffUTC: "2026-07-18T17:30:00Z",
-          homeScore: null,
-          awayScore: null
+          venue: "Australia",
+          kickoffUTC: "2026-07-18T10:40:00Z",
+          homeScore: 57,
+          awayScore: 10
         },
         {
-          id: "eng-ire-nc-r3",
+          id: "fiji-scotland-nc-r3",
           competition: "Nations Championship - Southern Hemisphere",
-          homeTeam: "England",
-          homeShort: "England",
-          awayTeam: "Ireland",
-          venue: "Twickenham Stadium, London",
-          kickoffUTC: "2026-07-18T19:00:00Z",
-          homeScore: null,
-          awayScore: null
+          homeTeam: "Fiji",
+          homeShort: "Fiji",
+          awayTeam: "Scotland",
+          venue: "Fiji",
+          kickoffUTC: "2026-07-18T12:10:00Z",
+          homeScore: 17,
+          awayScore: 33
         },
         {
-          id: "sco-wal-nc-r3",
+          id: "sa-wales-nc-r3",
           competition: "Nations Championship - Southern Hemisphere",
-          homeTeam: "Scotland",
-          homeShort: "Scotland",
+          homeTeam: "South Africa",
+          homeShort: "Springboks",
           awayTeam: "Wales",
-          venue: "Murrayfield, Edinburgh",
-          kickoffUTC: "2026-07-18T19:30:00Z",
-          homeScore: null,
-          awayScore: null
+          venue: "South Africa",
+          kickoffUTC: "2026-07-18T15:40:00Z",
+          homeScore: 43,
+          awayScore: 0
+        },
+        {
+          id: "arg-england-nc-r3",
+          competition: "Nations Championship - Southern Hemisphere",
+          homeTeam: "Argentina",
+          homeShort: "Argentina",
+          awayTeam: "England",
+          venue: "Argentina",
+          kickoffUTC: "2026-07-18T19:10:00Z",
+          homeScore: 24,
+          awayScore: 31
         },
         
         // AUGUST 2026 - Rugby's Greatest Rivalry Tour (All Blacks in South Africa)
@@ -457,14 +522,8 @@ function seedDatabase() {
           awayTeam = excluded.awayTeam,
           venue = excluded.venue,
           kickoffUTC = excluded.kickoffUTC,
-          homeScore = CASE
-            WHEN excluded.homeScore IS NOT NULL AND excluded.awayScore IS NOT NULL THEN excluded.homeScore
-            ELSE games.homeScore
-          END,
-          awayScore = CASE
-            WHEN excluded.homeScore IS NOT NULL AND excluded.awayScore IS NOT NULL THEN excluded.awayScore
-            ELSE games.awayScore
-          END,
+          homeScore = COALESCE(games.homeScore, excluded.homeScore),
+          awayScore = COALESCE(games.awayScore, excluded.awayScore),
           updated_at = CURRENT_TIMESTAMP
       `);
 
@@ -483,7 +542,17 @@ function seedDatabase() {
       });
 
       stmt.finalize(() => {
-        console.log('Database seeded/synced with canonical 2026 games');
+        const canonicalIds = games.map((game) => game.id);
+        const placeholders = canonicalIds.map(() => '?').join(',');
+        db.run(
+          `DELETE FROM games WHERE substr(kickoffUTC, 1, 4) = ? AND id NOT IN (${placeholders})`,
+          [FIXTURE_YEAR, ...canonicalIds],
+          (deleteErr) => {
+            if (deleteErr) console.error('Error removing stale games:', deleteErr.message);
+            else console.log('Database seeded/synced with canonical 2026 games');
+            startScorePolling();
+          }
+        );
       });
     }
   });
@@ -557,100 +626,138 @@ app.put('/api/games/:id/score', (req, res) => {
   );
 });
 
-// Update scores from web/ESPN API with mock fallback
+// Update scores from live feeds with mock fallback
 app.post('/api/update-scores', async (req, res) => {
   try {
-    // Fetch all games from the database
-    db.all(
-      'SELECT * FROM games WHERE substr(kickoffUTC, 1, 4) = ? AND (homeScore IS NULL OR homeScore = 0) AND (awayScore IS NULL OR awayScore = 0)',
-      [FIXTURE_YEAR],
-      async (err, games) => {
-      if (err) {
-        console.error('Error fetching games for score update:', err.message);
-        return res.status(500).json({ error: 'Internal server error' });
-      }
-
-      let updated = 0;
-      const now = new Date();
-      const matchDuration = 100 * 60 * 1000; // ~100 minutes
-      
-      console.log(`Update scores: Current time is ${now.toISOString()}`);
-      console.log(`Found ${games.length} games with empty scores`);
-
-      // Check which games have been played (past kickoff time)
-      for (const game of games) {
-        const kickoff = new Date(game.kickoffUTC);
-        const gameEndTime = new Date(kickoff.getTime() + matchDuration);
-
-        // If game has passed (kickoff + match duration), try to fetch score
-        if (now >= gameEndTime) {
-          console.log(`Game ${game.id}: now (${now.toISOString()}) >= gameEnd (${gameEndTime.toISOString()})`);
-          try {
-            // Try to fetch from ESPN API first
-            let score = await fetchScoreFromWeb(game);
-            
-            // Optional mock fallback for local testing only.
-            if (ENABLE_MOCK_SCORES && (!score || score.homeScore === null || score.awayScore === null)) {
-              score = generateMockScore(game);
-            }
-            
-            if (score && score.homeScore !== null && score.awayScore !== null) {
-              db.run(
-                'UPDATE games SET homeScore = ?, awayScore = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                [score.homeScore, score.awayScore, game.id],
-                function(err) {
-                  if (!err && this.changes > 0) {
-                    updated++;
-                    console.log(`Updated score for ${game.id}: ${score.homeScore}-${score.awayScore}`);
-                  }
-                }
-              );
-            }
-          } catch (e) {
-            console.error(`Error fetching score for ${game.id}:`, e.message);
-          }
-        } else {
-          console.log(`Game ${game.id}: not ready yet (${kickoff.toISOString()})`);
-        }
-      }
-
-      // Return results after a short delay to ensure DB updates
-      setTimeout(() => {
-        res.json({ success: true, updated, message: `Updated ${updated} games` });
-      }, 500);
-      }
-    );
+    const result = await updateScoresFromFeeds('manual');
+    res.json({ success: true, ...result, message: `Updated ${result.updated} games` });
   } catch (error) {
     console.error('Error updating scores:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Function to fetch scores from ESPN/web sources
-async function fetchScoreFromWeb(game) {
+async function updateScoresFromFeeds(reason = 'scheduled') {
+  if (scoreUpdateInProgress) {
+    console.log(`Score update skipped (${reason}); another update is already running`);
+    return { updated: 0, checked: 0, skipped: true };
+  }
+
+  scoreUpdateInProgress = true;
+
   try {
-    // Try ESPN API endpoint for rugby
-    const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/rugby/international/scoreboard?limit=100`;
+    const games = await dbAll(
+      'SELECT * FROM games WHERE substr(kickoffUTC, 1, 4) = ? ORDER BY kickoffUTC ASC',
+      [FIXTURE_YEAR]
+    );
+
+    let updated = 0;
+    let checked = 0;
+    const now = new Date();
     
-    const response = await fetch(espnUrl, { timeout: 5000 });
+    console.log(`Update scores (${reason}): Current time is ${now.toISOString()}`);
+    console.log(`Checking ${games.length} games for ${FIXTURE_YEAR}`);
+
+    for (const game of games) {
+      const kickoff = new Date(game.kickoffUTC);
+      const gameEndTime = new Date(kickoff.getTime() + MATCH_DURATION_MS);
+
+      if (now < gameEndTime) {
+        console.log(`Game ${game.id}: not ready yet (${kickoff.toISOString()})`);
+        continue;
+      }
+
+      checked++;
+      console.log(`Game ${game.id}: checking live feeds`);
+
+      try {
+        let score = await fetchScoreFromWeb(game);
+        
+        if (ENABLE_MOCK_SCORES && (!score || score.homeScore === null || score.awayScore === null)) {
+          score = generateMockScore(game);
+        }
+        
+        if (score && score.homeScore !== null && score.awayScore !== null &&
+            (game.homeScore !== score.homeScore || game.awayScore !== score.awayScore)) {
+          const result = await dbRun(
+            'UPDATE games SET homeScore = ?, awayScore = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [score.homeScore, score.awayScore, game.id]
+          );
+
+          if (result.changes > 0) {
+            updated++;
+            console.log(`Updated score for ${game.id}: ${score.homeScore}-${score.awayScore}`);
+          }
+        }
+      } catch (e) {
+        console.error(`Error fetching score for ${game.id}:`, e.message);
+      }
+    }
+
+    return { updated, checked, skipped: false };
+  } finally {
+    scoreUpdateInProgress = false;
+  }
+}
+
+function startScorePolling() {
+  if (scorePollingStarted || SCORE_POLL_INTERVAL_MS <= 0) return;
+  scorePollingStarted = true;
+
+  console.log(`Score polling enabled every ${Math.round(SCORE_POLL_INTERVAL_MS / 60000)} minutes`);
+  setTimeout(() => {
+    updateScoresFromFeeds('startup').catch((error) => {
+      console.error('Startup score update failed:', error.message);
+    });
+  }, 15000);
+
+  setInterval(() => {
+    updateScoresFromFeeds('scheduled').catch((error) => {
+      console.error('Scheduled score update failed:', error.message);
+    });
+  }, SCORE_POLL_INTERVAL_MS);
+}
+
+// Function to fetch scores from live web sources
+async function fetchScoreFromWeb(game) {
+  if (game.competition.includes('Nations Championship')) {
+    const allRugbyScore = await fetchScoreFromAllRugby(game);
+    if (allRugbyScore) return allRugbyScore;
+  }
+
+  const sportsDbScore = await fetchScoreFromTheSportsDb(game);
+  if (sportsDbScore) return sportsDbScore;
+
+  try {
+    const gameDate = game.kickoffUTC.slice(0, 10).replace(/-/g, '');
+    const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/rugby/international/scoreboard?dates=${gameDate}&limit=100`;
+    
+    const response = await fetch(espnUrl, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return null;
+
     const data = await response.json();
     
     // Search through events for matching game
     if (data.events) {
       for (const event of data.events) {
-        const competitor1 = event.competitors?.[0];
-        const competitor2 = event.competitors?.[1];
+        const competitions = event.competitions?.length ? event.competitions : [{ competitors: event.competitors || [] }];
+
+        for (const competition of competitions) {
+          const competitors = competition.competitors || [];
+          const homeCompetitor = competitors.find((competitor) => competitor.homeAway === 'home') || competitors[0];
+          const awayCompetitor = competitors.find((competitor) => competitor.homeAway === 'away') || competitors[1];
+          const completed = competition.status?.type?.completed || event.status?.type?.completed;
         
-        if (competitor1 && competitor2) {
-          const homeMatch = competitor1.team?.displayName?.includes(game.homeTeam) ||
-                           competitor1.displayName?.includes(game.homeTeam);
-          const awayMatch = competitor2.team?.displayName?.includes(game.awayTeam) ||
-                           competitor2.displayName?.includes(game.awayTeam);
-          
-          if (homeMatch && awayMatch && event.status?.type?.completed) {
+          if (homeCompetitor && awayCompetitor && completed &&
+              competitorMatchesTeam(homeCompetitor, game.homeTeam) &&
+              competitorMatchesTeam(awayCompetitor, game.awayTeam)) {
+            const homeScore = parseInt(homeCompetitor.score, 10);
+            const awayScore = parseInt(awayCompetitor.score, 10);
+            if (Number.isNaN(homeScore) || Number.isNaN(awayScore)) return null;
+
             return {
-              homeScore: parseInt(competitor1.score) || 0,
-              awayScore: parseInt(competitor2.score) || 0
+              homeScore,
+              awayScore
             };
           }
         }
@@ -662,6 +769,121 @@ async function fetchScoreFromWeb(game) {
     console.error('ESPN API fetch error:', error.message);
     return null;
   }
+}
+
+async function fetchScoreFromAllRugby(game) {
+  const scores = await fetchAllRugbyNationsChampionshipScores();
+  return scores.find((score) =>
+    teamsMatch(score.homeTeam, game.homeTeam) && teamsMatch(score.awayTeam, game.awayTeam)
+  ) || null;
+}
+
+async function fetchAllRugbyNationsChampionshipScores() {
+  const cacheAgeMs = Date.now() - allRugbyScoreCache.fetchedAt;
+  if (cacheAgeMs < 5 * 60 * 1000 && allRugbyScoreCache.scores.length > 0) {
+    return allRugbyScoreCache.scores;
+  }
+
+  try {
+    const response = await fetch(ALL_RUGBY_NATIONS_CHAMPIONSHIP_URL, {
+      headers: { 'user-agent': 'rugby-score-tracker/1.0' },
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (!response.ok) {
+      console.error(`All.Rugby fetch failed: HTTP ${response.status}`);
+      return allRugbyScoreCache.scores;
+    }
+
+    const html = await response.text();
+    const scores = parseAllRugbyScores(html);
+    allRugbyScoreCache = { fetchedAt: Date.now(), scores };
+    console.log(`Loaded ${scores.length} scores from All.Rugby`);
+    return scores;
+  } catch (error) {
+    console.error('All.Rugby fetch error:', error.message);
+    return allRugbyScoreCache.scores;
+  }
+}
+
+function parseAllRugbyScores(html) {
+  const scores = [];
+  const matchRegex = /<a\s+class="mat"[^>]*title="Match Report\s+([^"<>]+?)\s+vs\s+([^"<>]+?)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+
+  while ((match = matchRegex.exec(html)) !== null) {
+    const [, homeTeam, awayTeam, block] = match;
+    const scoreMatch = block.match(/<div\s+class="[^"]*\bres\b[^"]*"[^>]*>\s*(\d+)\s*-\s*(\d+)\s*<\/div>/i);
+    if (!scoreMatch) continue;
+
+    scores.push({
+      homeTeam: decodeHtml(homeTeam),
+      awayTeam: decodeHtml(awayTeam),
+      homeScore: Number(scoreMatch[1]),
+      awayScore: Number(scoreMatch[2]),
+      source: 'all.rugby'
+    });
+  }
+
+  return scores;
+}
+
+async function fetchScoreFromTheSportsDb(game) {
+  try {
+    const gameDate = game.kickoffUTC.slice(0, 10);
+    const url = `https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${gameDate}&s=Rugby`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const events = Array.isArray(data.events) ? data.events : [];
+    const event = events.find((candidate) =>
+      teamsMatch(candidate.strHomeTeam, game.homeTeam) && teamsMatch(candidate.strAwayTeam, game.awayTeam)
+    );
+
+    if (!event || event.intHomeScore === null || event.intAwayScore === null) return null;
+
+    return {
+      homeScore: Number(event.intHomeScore),
+      awayScore: Number(event.intAwayScore),
+      source: 'thesportsdb'
+    };
+  } catch (error) {
+    console.error('TheSportsDB fetch error:', error.message);
+    return null;
+  }
+}
+
+function normalizeTeamName(value = '') {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function teamsMatch(left, right) {
+  const normalizedLeft = normalizeTeamName(left);
+  const normalizedRight = normalizeTeamName(right);
+  return normalizedLeft === normalizedRight || normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft);
+}
+
+function decodeHtml(value = '') {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .trim();
+}
+
+function competitorMatchesTeam(competitor, teamName) {
+  const expected = normalizeTeamName(teamName);
+  const names = [
+    competitor.displayName,
+    competitor.team?.displayName,
+    competitor.team?.name,
+    competitor.team?.shortDisplayName,
+    competitor.team?.abbreviation
+  ].filter(Boolean).map(normalizeTeamName);
+
+  return names.some((name) => name.includes(expected) || expected.includes(name));
 }
 
 // Generate mock scores for past games

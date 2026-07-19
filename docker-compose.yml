@@ -8,6 +8,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - DB_PATH=/data/mydata.db
       - FIXTURE_YEAR=2026
       - ENABLE_MOCK_SCORES=false
     restart: unless-stopped
